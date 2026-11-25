@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import type { Reminder, ReminderInput } from "../types";
+import type { Reminder, ReminderInput, ReminderStyle } from "../types";
 import { IconBell, IconClose } from "./icons";
 
 interface ReminderEditorProps {
@@ -14,6 +14,7 @@ export function ReminderEditor({ reminder, onClose, onSave }: ReminderEditorProp
   const [title, setTitle] = useState(reminder?.title ?? "喝水");
   const [body, setBody] = useState(reminder?.body ?? "起来活动一下，补充水分");
   const [interval, setIntervalMinutes] = useState(reminder?.intervalMinutes ?? 10);
+  const [style, setStyle] = useState<ReminderStyle>(reminder?.style ?? "notification");
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -39,6 +40,11 @@ export function ReminderEditor({ reminder, onClose, onSave }: ReminderEditorProp
         title: value,
         body,
         intervalMinutes: interval,
+        style,
+        // 编辑任务关联的提醒时，保留关联与时段配置
+        todoId: reminder?.todoId ?? null,
+        startAt: reminder?.startAt ?? null,
+        endAt: reminder?.endAt ?? null,
       });
       onClose();
     } catch (err) {
@@ -115,6 +121,29 @@ export function ReminderEditor({ reminder, onClose, onSave }: ReminderEditorProp
               <span>分钟提醒一次</span>
             </div>
             {!intervalValid && <p className="form-hint error">请输入 1 到 1440 之间的整数分钟数。</p>}
+          </div>
+
+          <div className="field">
+            <span className="field-label">提醒方式</span>
+            <div className="style-select">
+              <button
+                type="button"
+                className={`style-option${style === "notification" ? " is-selected" : ""}`}
+                onClick={() => setStyle("notification")}
+              >
+                系统通知
+              </button>
+              <button
+                type="button"
+                className={`style-option${style === "monster" ? " is-selected" : ""}`}
+                onClick={() => setStyle("monster")}
+              >
+                桌面小怪兽
+              </button>
+            </div>
+            {style === "monster" && (
+              <p className="form-hint">提醒时小怪兽从桌面右下角出现，点击可查看详情或关闭；不发声、不抢焦点。</p>
+            )}
           </div>
 
           <p className="reminder-tip">

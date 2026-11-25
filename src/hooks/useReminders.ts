@@ -29,13 +29,24 @@ export function useReminders() {
     void refresh();
   }, [refresh]);
 
+  // 定期刷新，更新“下次提醒”和到点自动停用的状态
+  useEffect(() => {
+    const timer = window.setInterval(() => {
+      void refresh();
+    }, 30_000);
+    return () => window.clearInterval(timer);
+  }, [refresh]);
+
   useEffect(() => {
     let cancelled = false;
     let unlisten: (() => void) | undefined;
 
     void listen<Reminder>("reminder-fired", (event) => {
       if (cancelled) return;
-      setFired({ ...event.payload });
+      // 小怪兽模式只在屏幕边缘安静探头，不再弹应用内横幅
+      if (event.payload.style !== "monster") {
+        setFired({ ...event.payload });
+      }
       void refresh();
     })
       .then((fn) => {
@@ -101,6 +112,24 @@ export function useReminders() {
     [guard, refresh],
   );
 
+  const setTodoRemindersEnabled = useCallback(
+    (todoId: number, enabled: boolean) =>
+      guard(async () => {
+        await invoke("set_reminders_enabled_for_todo", { todoId, enabled });
+        await refresh();
+      }),
+    [guard, refresh],
+  );
+
+  const removeRemindersForTodo = useCallback(
+    (todoId: number) =>
+      guard(async () => {
+        await invoke("delete_reminders_for_todo", { todoId });
+        await refresh();
+      }),
+    [guard, refresh],
+  );
+
   const clearFired = useCallback(() => setFired(null), []);
 
   return {
@@ -113,6 +142,8 @@ export function useReminders() {
     updateReminder,
     setEnabled,
     removeReminder,
+    setTodoRemindersEnabled,
+    removeRemindersForTodo,
     clearFired,
   };
 }

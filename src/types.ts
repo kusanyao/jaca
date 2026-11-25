@@ -33,12 +33,18 @@ export interface TodoInput {
   tagIds?: number[];
 }
 
+export type ReminderStyle = "notification" | "monster";
+
 export interface Reminder {
   id: number;
   title: string;
   body: string;
   intervalMinutes: number;
   enabled: boolean;
+  style: ReminderStyle;
+  todoId: number | null;
+  startAt: number | null;
+  endAt: number | null;
   lastFiredAt: number | null;
   createdAt: number;
   updatedAt: number;
@@ -48,6 +54,17 @@ export interface ReminderInput {
   title: string;
   body: string;
   intervalMinutes: number;
+  style?: ReminderStyle;
+  todoId?: number | null;
+  startAt?: number | null;
+  endAt?: number | null;
+}
+
+export interface TodoReminderDraft {
+  startAt: number;
+  endAt: number;
+  intervalMinutes: number;
+  style: ReminderStyle;
 }
 
 export type Filter =

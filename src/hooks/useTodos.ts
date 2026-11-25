@@ -43,8 +43,9 @@ export function useTodos() {
   const addTodo = useCallback(
     (input: TodoInput) =>
       guard(async () => {
-        await api.createTodo(input);
+        const id = await api.createTodo(input);
         await refresh();
+        return id;
       }),
     [guard, refresh],
   );

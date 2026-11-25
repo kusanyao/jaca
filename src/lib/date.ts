@@ -57,6 +57,34 @@ export function fromDatetimeLocal(value: string): string | null {
   return Number.isNaN(date.getTime()) ? null : date.toISOString();
 }
 
+/** 毫秒时间戳 → <input type="date"> 的本地日期 */
+export function toDateInput(ms: number): string {
+  const date = new Date(ms);
+  return `${date.getFullYear()}-${pad(date.getMonth() + 1)}-${pad(date.getDate())}`;
+}
+
+/** 毫秒时间戳 → <input type="time"> 的本地时间 */
+export function toTimeInput(ms: number): string {
+  const date = new Date(ms);
+  return `${pad(date.getHours())}:${pad(date.getMinutes())}`;
+}
+
+/** 本地日期 + 时间 → 毫秒时间戳 */
+export function combineLocal(date: string, time: string): number | null {
+  if (!date || !time) return null;
+  const value = new Date(`${date}T${time}:00`);
+  return Number.isNaN(value.getTime()) ? null : value.getTime();
+}
+
+/** 提醒时段展示：11月13日 周五 17:00–21:00 */
+export function formatWindow(startAt: number, endAt: number): string {
+  const start = new Date(startAt);
+  const end = new Date(endAt);
+  const weekdays = ["周日", "周一", "周二", "周三", "周四", "周五", "周六"];
+  const year = start.getFullYear() === new Date().getFullYear() ? "" : `${start.getFullYear()}年`;
+  return `${year}${start.getMonth() + 1}月${start.getDate()}日 ${weekdays[start.getDay()]} ${pad(start.getHours())}:${pad(start.getMinutes())}–${pad(end.getHours())}:${pad(end.getMinutes())}`;
+}
+
 export function todayLabel(): string {
   const now = new Date();
   const weekdays = ["周日", "周一", "周二", "周三", "周四", "周五", "周六"];

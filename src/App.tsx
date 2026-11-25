@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useState } from "react";
+import { listen } from "@tauri-apps/api/event";
 import { useTodos } from "./hooks/useTodos";
 import { useReminders } from "./hooks/useReminders";
 import { Sidebar } from "./components/Sidebar";
@@ -11,7 +12,15 @@ import { ReminderEditor } from "./components/ReminderEditor";
 import { ReminderToast } from "./components/ReminderToast";
 import { ConfirmDialog } from "./components/ConfirmDialog";
 import { IconPlus } from "./components/icons";
-import type { Filter, Reminder, ReminderInput, Tag, Todo, TodoInput } from "./types";
+import type {
+  Filter,
+  Reminder,
+  ReminderInput,
+  Tag,
+  Todo,
+  TodoInput,
+  TodoReminderDraft,
+} from "./types";
 import { isOverdue, isToday, todayLabel } from "./lib/date";
 
 const FILTER_TITLES = {
@@ -78,6 +87,8 @@ export default function App() {
     updateReminder,
     setEnabled,
     removeReminder,
+    setTodoRemindersEnabled,
+    removeRemindersForTodo,
     clearFired,
   } = useReminders();
 
@@ -148,6 +159,40 @@ export default function App() {
     }
   }, [filter, tags]);
 
+  // 小怪兽点击“查看详情”：打开对应待办或提醒
+  useEffect(() => {
+    let cancelled = false;
+    let unlisten: (() => void) | undefined;
+
+    void listen<{ reminderId: number; todoId: number | null }>(
+      "open-reminder-detail",
+      (event) => {
+        if (cancelled) return;
+        const { reminderId, todoId } = event.payload;
+
+        if (todoId !== null) {
+          const todo = todos.find((item) => item.id === todoId);
+          if (todo) {
+            setEditor({ todo });
+            return;
+          }
+        }
+
+        const reminder = reminders.find((item) => item.id === reminderId);
+        setFilter({ kind: "reminders" });
+        if (reminder) setReminderEditor({ reminder });
+      },
+    ).then((fn) => {
+      if (cancelled) fn();
+      else unlisten = fn;
+    });
+
+    return () => {
+      cancelled = true;
+      unlisten?.();
+    };
+  }, [todos, reminders]);
+
   async function handleQuickAdd(value: string) {
     try {
       await addTodo({ title: value });
@@ -156,11 +201,53 @@ export default function App() {
     }
   }
 
-  async function handleSave(input: TodoInput) {
+  async function handleSave(input: TodoInput, reminderDraft: TodoReminderDraft | null) {
     if (editor?.todo) {
-      await editTodo(editor.todo.id, input);
+      const todoId = editor.todo.id;
+      await editTodo(todoId, input);
+
+      const linked = reminders.find((item) => item.todoId === todoId) ?? null;
+      if (reminderDraft) {
+        const payload: ReminderInput = {
+          title: input.title,
+          body: "别忘了完成这项待办",
+          intervalMinutes: reminderDraft.intervalMinutes,
+          style: reminderDraft.style,
+          todoId,
+          startAt: reminderDraft.startAt,
+          endAt: reminderDraft.endAt,
+        };
+        if (linked) {
+          await updateReminder(linked.id, payload);
+        } else {
+          await createReminder(payload);
+        }
+      } else if (linked) {
+        await removeReminder(linked.id);
+      }
     } else {
-      await addTodo(input);
+      const id = await addTodo(input);
+      if (reminderDraft) {
+        await createReminder({
+          title: input.title,
+          body: "别忘了完成这项待办",
+          intervalMinutes: reminderDraft.intervalMinutes,
+          style: reminderDraft.style,
+          todoId: id,
+          startAt: reminderDraft.startAt,
+          endAt: reminderDraft.endAt,
+        });
+      }
+    }
+  }
+
+  async function handleToggle(todo: Todo) {
+    try {
+      await toggleTodo(todo);
+      // 完成时停用关联提醒，重新打开时恢复（时段已结束的提醒会被后端拒绝）
+      await setTodoRemindersEnabled(todo.id, todo.completed);
+    } catch {
+      // 错误由 hooks 记录并显示
     }
   }
 
@@ -169,7 +256,10 @@ export default function App() {
       title: "删除待办",
       message: `确定删除「${todo.title}」吗？此操作无法撤销。`,
       confirmText: "删除",
-      action: () => removeTodo(todo.id),
+      action: async () => {
+        await removeRemindersForTodo(todo.id);
+        await removeTodo(todo.id);
+      },
     });
   }
 
@@ -210,6 +300,10 @@ export default function App() {
       : filter.kind === "reminders"
         ? { title: "", hint: "" }
         : EMPTY_COPY[filter.kind];
+
+  const editingReminder = editor?.todo
+    ? reminders.find((item) => item.todoId === editor.todo?.id) ?? null
+    : null;
 
   return (
     <div className="app">
@@ -301,7 +395,7 @@ export default function App() {
                   todos={visibleTodos}
                   emptyTitle={empty.title}
                   emptyHint={empty.hint}
-                  onToggle={toggleTodo}
+                  onToggle={handleToggle}
                   onEdit={(todo) => setEditor({ todo })}
                   onDelete={requestDeleteTodo}
                 />
@@ -315,6 +409,7 @@ export default function App() {
         <TodoEditor
           key={editor.todo?.id ?? "new"}
           todo={editor.todo}
+          reminder={editingReminder}
           tags={tags}
           onClose={() => setEditor(null)}
           onSave={handleSave}

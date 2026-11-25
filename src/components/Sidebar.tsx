@@ -1,4 +1,5 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
+import { disable, enable, isEnabled } from "@tauri-apps/plugin-autostart";
 import type { Filter, Tag } from "../types";
 import {
   IconAlert,
@@ -40,6 +41,40 @@ export function Sidebar({ filter, tags, counts, onFilterChange, onCreateTag, onD
   const [addingTag, setAddingTag] = useState(false);
   const [tagName, setTagName] = useState("");
   const [saving, setSaving] = useState(false);
+  const [autostart, setAutostart] = useState<boolean | null>(null);
+  const [autostartBusy, setAutostartBusy] = useState(false);
+
+  useEffect(() => {
+    let cancelled = false;
+    void isEnabled()
+      .then((value) => {
+        if (!cancelled) setAutostart(value);
+      })
+      .catch(() => {
+        if (!cancelled) setAutostart(false);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+
+  async function toggleAutostart() {
+    if (autostart === null || autostartBusy) return;
+    setAutostartBusy(true);
+    try {
+      if (autostart) {
+        await disable();
+        setAutostart(false);
+      } else {
+        await enable();
+        setAutostart(true);
+      }
+    } catch {
+      // 系统策略禁止时保持原状态
+    } finally {
+      setAutostartBusy(false);
+    }
+  }
 
   async function submitTag() {
     const name = tagName.trim();
@@ -161,7 +196,20 @@ export function Sidebar({ filter, tags, counts, onFilterChange, onCreateTag, onD
         })}
       </div>
 
-      <div className="sidebar-footer">数据保存在本机 · v0.1.0</div>
+      <div className="sidebar-footer">
+        <button
+          type="button"
+          role="switch"
+          aria-checked={autostart === true}
+          className="autostart-toggle"
+          disabled={autostart === null || autostartBusy}
+          onClick={() => void toggleAutostart()}
+        >
+          <span className={`autostart-switch${autostart ? " is-on" : ""}`} aria-hidden="true" />
+          <span>开机自动启动</span>
+        </button>
+        <div>数据保存在本机 · v0.2.0</div>
+      </div>
     </aside>
   );
 }
